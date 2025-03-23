@@ -1,31 +1,23 @@
 using Core.Entities;
-using Infrastructure.Data;
+using Core.Interfaces;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class ProductsController : ControllerBase
+public class ProductsController(IProductRepository repo) : ControllerBase
 {
-    private readonly StoreContext _context;
-
-    public ProductsController(StoreContext context)
-    {
-        _context = context;
-    }
-
     [HttpGet] // api/products
-    public async Task<ActionResult<IEnumerable<Product>>> GetProducts()
+    public async Task<ActionResult<IReadOnlyList<Product>>> GetProducts(string? brand, string? type, string? sort)
     {
-        return await _context.Products.ToListAsync();
+        return Ok(await repo.GetProductsAsync(brand, type, sort));
     }
 
     [HttpGet("{id:int}")] // api/products/{id}
     public async Task<ActionResult<Product>> GetProduct(int id)
     {
-        Product? product = await _context.Products.FindAsync(id);
+        Product? product = await repo.GetProductByIdAsync(id);
 
         if (product == null) return NotFound();
 
@@ -35,10 +27,12 @@ public class ProductsController : ControllerBase
     [HttpPost] // api/products
     public async Task<ActionResult<Product>> CreateProduct(Product product)
     {
-        _context.Products.Add(product);
-        await _context.SaveChangesAsync();
+        repo.AddProduct(product);
 
-        return product;
+        if (await repo.SaveChangesAsync())
+            return CreatedAtAction(nameof(GetProduct), new { id = product.Id }, product);
+
+        return BadRequest("Problem creating product");
     }
 
     [HttpPut("{id:int}")] // api/products/{id}
@@ -47,28 +41,43 @@ public class ProductsController : ControllerBase
         if (id != product.Id || !ProductExists(id))
             return BadRequest("Cannot update this product");
 
-        _context.Entry(product).State = EntityState.Modified;
+        repo.UpdateProduct(product);
 
-        await _context.SaveChangesAsync();
+        if (await repo.SaveChangesAsync())
+            return NoContent();
 
-        return NoContent();
+        return BadRequest("Problem updating the product");
     }
 
     [HttpDelete("{id:int}")] // api/products/{id}
     public async Task<ActionResult> DeleteProduct(int id)
     {
-        Product? product = await _context.Products.FindAsync(id);
+        Product? product = await repo.GetProductByIdAsync(id);
 
         if (product == null) return NotFound();
 
-        _context.Products.Remove(product);
-        await _context.SaveChangesAsync();
+        repo.DeleteProduct(product);
 
-        return NoContent();
+        if (await repo.SaveChangesAsync())
+            return NoContent();
+
+        return BadRequest("Problem deleting the product");
+    }
+
+    [HttpGet("brands")] // api/products/brands
+    public async Task<ActionResult<IReadOnlyList<string>>> GetProductBrands()
+    {
+        return Ok(await repo.GetProductBrandsAsync());
+    }
+
+    [HttpGet("types")] // api/products/types
+    public async Task<ActionResult<IReadOnlyList<string>>> GetProductTypes()
+    {
+        return Ok(await repo.GetProductTypesAsync());
     }
 
     private bool ProductExists(int id)
     {
-        return _context.Products.Any(product => product.Id == id);
+        return repo.ProductExists(id);
     }
 }
