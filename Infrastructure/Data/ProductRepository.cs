@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Data;
 
+// No longer used due to Generic Repository pattern can be deleted
 public class ProductRepository(StoreContext context) : IProductRepository
 {
     public void AddProduct(Product product)
